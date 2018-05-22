@@ -31,6 +31,8 @@ import java.io.*;
 
 import java.nio.ByteBuffer;
 
+import sun.security.action.GetBooleanAction;
+import sun.security.action.GetPropertyAction;
 import sun.security.jca.JCAUtil;
 
 /**
@@ -50,6 +52,10 @@ import sun.security.jca.JCAUtil;
  */
 
 public abstract class SignatureSpi {
+
+    protected static final boolean VERIFY_TRAILING =
+            "true".equalsIgnoreCase(java.security.AccessController.doPrivileged(
+                    new GetPropertyAction("com.alibaba.jdk.verifyECDSATrailing", "true")));
 
     /**
      * Application-specified source of randomness.

@@ -758,12 +758,12 @@ final class P11Signature extends SignatureSpi {
     private static byte[] asn1ToDSA(byte[] sig) throws SignatureException {
         try {
             // Enforce strict DER checking for signatures
-            DerInputStream in = new DerInputStream(sig, 0, sig.length, false);
+            DerInputStream in = new DerInputStream(sig, 0, sig.length, !VERIFY_TRAILING);
             DerValue[] values = in.getSequence(2);
 
             // check number of components in the read sequence
             // and trailing data
-            if ((values.length != 2) || (in.available() != 0)) {
+            if (VERIFY_TRAILING && ((values.length != 2) || (in.available() != 0))) {
                 throw new IOException("Invalid encoding for signature");
             }
 
@@ -786,12 +786,12 @@ final class P11Signature extends SignatureSpi {
     private byte[] asn1ToECDSA(byte[] sig) throws SignatureException {
         try {
             // Enforce strict DER checking for signatures
-            DerInputStream in = new DerInputStream(sig, 0, sig.length, false);
+            DerInputStream in = new DerInputStream(sig, 0, sig.length, !VERIFY_TRAILING);
             DerValue[] values = in.getSequence(2);
 
             // check number of components in the read sequence
             // and trailing data
-            if ((values.length != 2) || (in.available() != 0)) {
+            if (VERIFY_TRAILING && ((values.length != 2) || (in.available() != 0))) {
                 throw new IOException("Invalid encoding for signature");
             }
 

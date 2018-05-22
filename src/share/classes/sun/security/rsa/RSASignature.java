@@ -248,7 +248,7 @@ public abstract class RSASignature extends SignatureSpi {
     public static byte[] decodeSignature(ObjectIdentifier oid, byte[] sig)
             throws IOException {
         // Enforce strict DER checking for signatures
-        DerInputStream in = new DerInputStream(sig, 0, sig.length, false);
+        DerInputStream in = new DerInputStream(sig, 0, sig.length, !VERIFY_TRAILING);
         DerValue[] values = in.getSequence(2);
         if ((values.length != 2) || (in.available() != 0)) {
             throw new IOException("SEQUENCE length error");

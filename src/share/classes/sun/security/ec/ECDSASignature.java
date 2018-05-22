@@ -406,7 +406,7 @@ abstract class ECDSASignature extends SignatureSpi {
         try {
 
             return verifySignedDigest(
-                ECUtil.decodeSignature(signature), getDigestValue(),
+                ECUtil.decodeSignature(signature, VERIFY_TRAILING), getDigestValue(),
                 w, encodedParams);
 
         } catch (GeneralSecurityException e) {

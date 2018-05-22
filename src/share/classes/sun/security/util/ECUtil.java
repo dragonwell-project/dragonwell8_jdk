@@ -227,15 +227,20 @@ public final class ECUtil {
 
     // Convert the DER encoding of R and S into a concatenation of R and S
     public static byte[] decodeSignature(byte[] sig) throws SignatureException {
+      return decodeSignature(sig, false);
+    }
+
+    // Convert the DER encoding of R and S into a concatenation of R and S
+    public static byte[] decodeSignature(byte[] sig, boolean verifyTrailing) throws SignatureException {
 
         try {
             // Enforce strict DER checking for signatures
-            DerInputStream in = new DerInputStream(sig, 0, sig.length, false);
+            DerInputStream in = new DerInputStream(sig, 0, sig.length, !verifyTrailing);
             DerValue[] values = in.getSequence(2);
 
             // check number of components in the read sequence
             // and trailing data
-            if ((values.length != 2) || (in.available() != 0)) {
+            if (verifyTrailing && (values.length != 2) || (in.available() != 0)) {
                 throw new IOException("Invalid encoding for signature");
             }
 
