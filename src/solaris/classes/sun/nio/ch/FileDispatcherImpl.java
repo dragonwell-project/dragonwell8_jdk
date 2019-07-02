@@ -25,8 +25,11 @@
 
 package sun.nio.ch;
 
+import sun.misc.SharedSecrets;
+
 import java.io.FileDescriptor;
 import java.io.IOException;
+import java.util.concurrent.Callable;
 
 class FileDispatcherImpl extends FileDispatcher {
 
@@ -43,32 +46,80 @@ class FileDispatcherImpl extends FileDispatcher {
     }
 
     int read(FileDescriptor fd, long address, int len) throws IOException {
+        if (SharedSecrets.getWispAsyncIOAccess() != null && SharedSecrets.getWispAsyncIOAccess().usingAsyncIO()) {
+            return SharedSecrets.getWispAsyncIOAccess().executeAsyncIO(new Callable<Integer>() {
+                @Override
+                public Integer call() throws Exception {
+                    return read0(fd, address, len);
+                }
+            });
+        }
         return read0(fd, address, len);
     }
 
     int pread(FileDescriptor fd, long address, int len, long position)
         throws IOException
     {
+        if (SharedSecrets.getWispAsyncIOAccess() != null && SharedSecrets.getWispAsyncIOAccess().usingAsyncIO()) {
+            return SharedSecrets.getWispAsyncIOAccess().executeAsyncIO(new Callable<Integer>() {
+                @Override
+                public Integer call() throws Exception {
+                    return pread0(fd, address, len, position);
+                }
+            });
+        }
         return pread0(fd, address, len, position);
     }
 
     long readv(FileDescriptor fd, long address, int len) throws IOException {
+        if (SharedSecrets.getWispAsyncIOAccess() != null && SharedSecrets.getWispAsyncIOAccess().usingAsyncIO()) {
+            return SharedSecrets.getWispAsyncIOAccess().executeAsyncIO(new Callable<Long>() {
+                @Override
+                public Long call() throws Exception {
+                    return readv0(fd, address, len);
+                }
+            });
+        }
         return readv0(fd, address, len);
     }
 
     int write(FileDescriptor fd, long address, int len) throws IOException {
+        if (SharedSecrets.getWispAsyncIOAccess() != null && SharedSecrets.getWispAsyncIOAccess().usingAsyncIO()) {
+            return SharedSecrets.getWispAsyncIOAccess().executeAsyncIO(new Callable<Integer>() {
+                @Override
+                public Integer call() throws Exception {
+                    return write0(fd, address, len);
+                }
+            });
+        }
         return write0(fd, address, len);
     }
 
     int pwrite(FileDescriptor fd, long address, int len, long position)
         throws IOException
     {
+        if (SharedSecrets.getWispAsyncIOAccess() != null && SharedSecrets.getWispAsyncIOAccess().usingAsyncIO()) {
+            return SharedSecrets.getWispAsyncIOAccess().executeAsyncIO(new Callable<Integer>() {
+                @Override
+                public Integer call() throws Exception {
+                    return pwrite0(fd, address, len, position);
+                }
+            });
+        }
         return pwrite0(fd, address, len, position);
     }
 
     long writev(FileDescriptor fd, long address, int len)
         throws IOException
     {
+        if (SharedSecrets.getWispAsyncIOAccess() != null && SharedSecrets.getWispAsyncIOAccess().usingAsyncIO()) {
+            return SharedSecrets.getWispAsyncIOAccess().executeAsyncIO(new Callable<Long>() {
+                @Override
+                public Long call() throws Exception {
+                    return writev0(fd, address, len);
+                }
+            });
+        }
         return writev0(fd, address, len);
     }
 
@@ -77,10 +128,26 @@ class FileDispatcherImpl extends FileDispatcher {
     }
 
     int force(FileDescriptor fd, boolean metaData) throws IOException {
+        if (SharedSecrets.getWispAsyncIOAccess() != null && SharedSecrets.getWispAsyncIOAccess().usingAsyncIO()) {
+            return SharedSecrets.getWispAsyncIOAccess().executeAsyncIO(new Callable<Integer>() {
+                @Override
+                public Integer call() throws Exception {
+                    return force0(fd, metaData);
+                }
+            });
+        }
         return force0(fd, metaData);
     }
 
     int truncate(FileDescriptor fd, long size) throws IOException {
+        if (SharedSecrets.getWispAsyncIOAccess() != null && SharedSecrets.getWispAsyncIOAccess().usingAsyncIO()) {
+            return SharedSecrets.getWispAsyncIOAccess().executeAsyncIO(new Callable<Integer>() {
+                @Override
+                public Integer call() throws Exception {
+                    return truncate0(fd, size);
+                }
+            });
+        }
         return truncate0(fd, size);
     }
 
