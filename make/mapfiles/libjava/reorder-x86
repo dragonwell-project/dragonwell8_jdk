@@ -67,7 +67,7 @@ text: .text%Java_java_lang_Double_doubleToLongBits;
 text: .text%Java_java_io_FileInputStream_open0;
 text: .text%fileOpen;
 text: .text%Java_java_io_UnixFileSystem_getLength;
-text: .text%Java_java_io_FileInputStream_readBytes;
+text: .text%Java_java_io_FileInputStream_readBytes0;
 text: .text%readBytes;
 text: .text%Java_java_io_FileInputStream_close0;
 text: .text%Java_java_lang_Object_getClass;
@@ -76,7 +76,7 @@ text: .text%VerifyClassCodes;
 # Test Exit
 text: .text%Java_java_lang_Shutdown_halt;
 # Test Hello
-text: .text%Java_java_io_FileOutputStream_writeBytes;
+text: .text%Java_java_io_FileOutputStream_writeBytes0;
 text: .text%writeBytes;
 # Test Sleep
 # Test IntToString

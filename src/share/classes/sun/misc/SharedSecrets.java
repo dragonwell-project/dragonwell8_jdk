@@ -70,6 +70,7 @@ public class SharedSecrets {
     private static JavaSecuritySignatureAccess javaSecuritySignatureAccess;
     private static WispEngineAccess wispEngineAccess;
     private static IOEventAccess ioEventAccess;
+    private static WispAsyncIOAccess wispAsyncIOAccess;
 
     public static JavaUtilJarAccess javaUtilJarAccess() {
         if (javaUtilJarAccess == null) {
@@ -278,6 +279,14 @@ public class SharedSecrets {
 
     public static void setWispEngineAccess(WispEngineAccess wispEngineAccess) {
         SharedSecrets.wispEngineAccess = wispEngineAccess;
+    }
+
+    public static WispAsyncIOAccess getWispAsyncIOAccess() {
+        return wispAsyncIOAccess;
+    }
+
+    public static void setWispAsyncIOAccess(WispAsyncIOAccess wispAsyncIOAccess) {
+        SharedSecrets.wispAsyncIOAccess = wispAsyncIOAccess;
     }
 
     public static UnsafeAccess getUnsafeAccess() {

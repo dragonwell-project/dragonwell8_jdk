@@ -26,6 +26,9 @@
 package java.io;
 
 import java.nio.channels.FileChannel;
+import java.util.concurrent.Callable;
+
+import sun.misc.SharedSecrets;
 import sun.nio.ch.FileChannelImpl;
 
 
@@ -287,7 +290,17 @@ class FileOutputStream extends OutputStream
      * @exception  IOException  if an I/O error occurs.
      */
     public void write(int b) throws IOException {
-        write(b, append);
+        if (SharedSecrets.getWispAsyncIOAccess() != null && SharedSecrets.getWispAsyncIOAccess().usingAsyncIO()) {
+            SharedSecrets.getWispAsyncIOAccess().executeAsyncIO(new Callable<Integer>() {
+                @Override
+                public Integer call() throws Exception {
+                    write(b, append);
+                    return 0;
+                }
+            });
+        } else {
+            write(b, append);
+        }
     }
 
     /**
@@ -299,8 +312,22 @@ class FileOutputStream extends OutputStream
      *     end of file
      * @exception IOException If an I/O error has occurred.
      */
-    private native void writeBytes(byte b[], int off, int len, boolean append)
+    private native void writeBytes0(byte b[], int off, int len, boolean append)
         throws IOException;
+
+    private void writeBytes(byte b[], int off, int len, boolean append) throws IOException {
+        if (SharedSecrets.getWispAsyncIOAccess() != null && SharedSecrets.getWispAsyncIOAccess().usingAsyncIO()) {
+            SharedSecrets.getWispAsyncIOAccess().executeAsyncIO(new Callable<Integer>() {
+                @Override
+                public Integer call() throws Exception {
+                    writeBytes0(b, off, len, append);
+                    return 0;
+                }
+            });
+        } else {
+            writeBytes0(b, off, len, append);
+        }
+    }
 
     /**
      * Writes <code>b.length</code> bytes from the specified byte array

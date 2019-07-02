@@ -26,6 +26,9 @@
 package java.io;
 
 import java.nio.channels.FileChannel;
+import java.util.concurrent.Callable;
+
+import sun.misc.SharedSecrets;
 import sun.nio.ch.FileChannelImpl;
 
 
@@ -204,6 +207,14 @@ class FileInputStream extends InputStream
      * @exception  IOException  if an I/O error occurs.
      */
     public int read() throws IOException {
+        if (SharedSecrets.getWispAsyncIOAccess() != null && SharedSecrets.getWispAsyncIOAccess().usingAsyncIO()) {
+            return SharedSecrets.getWispAsyncIOAccess().executeAsyncIO(new Callable<Integer>() {
+                @Override
+                public Integer call() throws Exception {
+                    return read0();
+                }
+            });
+        }
         return read0();
     }
 
@@ -216,7 +227,19 @@ class FileInputStream extends InputStream
      * @param len the number of bytes that are written
      * @exception IOException If an I/O error has occurred.
      */
-    private native int readBytes(byte b[], int off, int len) throws IOException;
+    private native int readBytes0(byte b[], int off, int len) throws IOException;
+
+    private int readBytes(byte b[], int off, int len) throws IOException {
+        if (SharedSecrets.getWispAsyncIOAccess() != null && SharedSecrets.getWispAsyncIOAccess().usingAsyncIO()) {
+            return SharedSecrets.getWispAsyncIOAccess().executeAsyncIO(new Callable<Integer>() {
+                @Override
+                public Integer call() throws Exception {
+                    return readBytes0(b, off, len);
+                }
+            });
+        }
+        return readBytes0(b, off, len);
+    }
 
     /**
      * Reads up to <code>b.length</code> bytes of data from this input

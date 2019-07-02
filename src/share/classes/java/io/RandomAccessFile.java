@@ -26,6 +26,9 @@
 package java.io;
 
 import java.nio.channels.FileChannel;
+import java.util.concurrent.Callable;
+
+import sun.misc.SharedSecrets;
 import sun.nio.ch.FileChannelImpl;
 
 
@@ -334,7 +337,16 @@ public class RandomAccessFile implements DataOutput, DataInput, Closeable {
      *                          end-of-file has been reached.
      */
     public int read() throws IOException {
-        return read0();
+        if (SharedSecrets.getWispAsyncIOAccess() != null && SharedSecrets.getWispAsyncIOAccess().usingAsyncIO()) {
+            return SharedSecrets.getWispAsyncIOAccess().executeAsyncIO(new Callable<Integer>() {
+                @Override
+                public Integer call() throws Exception {
+                    return read0();
+                }
+            });
+        } else {
+            return read0();
+        }
     }
 
     private native int read0() throws IOException;
@@ -346,7 +358,20 @@ public class RandomAccessFile implements DataOutput, DataInput, Closeable {
      * @param len the number of bytes to read.
      * @exception IOException If an I/O error has occurred.
      */
-    private native int readBytes(byte b[], int off, int len) throws IOException;
+    private native int readBytes0(byte b[], int off, int len) throws IOException;
+
+    private int readBytes(byte b[], int off, int len) throws IOException {
+        if (SharedSecrets.getWispAsyncIOAccess() != null && SharedSecrets.getWispAsyncIOAccess().usingAsyncIO()) {
+            return SharedSecrets.getWispAsyncIOAccess().executeAsyncIO(new Callable<Integer>() {
+                @Override
+                public Integer call() throws Exception {
+                    return readBytes0(b, off ,len);
+                }
+            });
+        } else {
+            return readBytes0(b, off, len);
+        }
+    }
 
     /**
      * Reads up to {@code len} bytes of data from this file into an
@@ -486,7 +511,17 @@ public class RandomAccessFile implements DataOutput, DataInput, Closeable {
      * @exception  IOException  if an I/O error occurs.
      */
     public void write(int b) throws IOException {
-        write0(b);
+        if (SharedSecrets.getWispAsyncIOAccess() != null && SharedSecrets.getWispAsyncIOAccess().usingAsyncIO()) {
+            SharedSecrets.getWispAsyncIOAccess().executeAsyncIO(new Callable<Integer>() {
+                @Override
+                public Integer call() throws Exception {
+                    write0(b);
+                    return 0;
+                }
+            });
+        } else {
+            write0(b);
+        }
     }
 
     private native void write0(int b) throws IOException;
@@ -499,7 +534,21 @@ public class RandomAccessFile implements DataOutput, DataInput, Closeable {
      * @param len the number of bytes that are written
      * @exception IOException If an I/O error has occurred.
      */
-    private native void writeBytes(byte b[], int off, int len) throws IOException;
+    private native void writeBytes0(byte b[], int off, int len) throws IOException;
+
+    private void writeBytes(byte b[], int off, int len) throws IOException {
+        if (SharedSecrets.getWispAsyncIOAccess() != null && SharedSecrets.getWispAsyncIOAccess().usingAsyncIO()) {
+            SharedSecrets.getWispAsyncIOAccess().executeAsyncIO(new Callable<Integer>() {
+                @Override
+                public Integer call() throws Exception {
+                    writeBytes0(b, off, len);
+                    return 0;
+                }
+            });
+        } else {
+            writeBytes0(b, off, len);
+        }
+    }
 
     /**
      * Writes {@code b.length} bytes from the specified byte array
