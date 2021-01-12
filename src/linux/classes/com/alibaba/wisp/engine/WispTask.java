@@ -112,7 +112,8 @@ public class WispTask implements Comparable<WispTask> {
 
     enum Status {
         ALIVE,      // ALIVE
-        ZOMBIE      // exited
+        CACHED,     // exited
+        DEAD        // quited and never be used
     }
 
     private Runnable runnable; // runnable for created task
@@ -263,7 +264,7 @@ public class WispTask implements Comparable<WispTask> {
 
                     }
                 } else {
-                    carrier.schedule();
+                    carrier.schedule(false);
                 }
             }
         }
@@ -310,9 +311,10 @@ public class WispTask implements Comparable<WispTask> {
      * Switch task. we need the information of {@code from} task param
      * to do classloader switch etc..
      * <p>
+     * @param terminal indicate terminal current coroutine
      * {@link #stealLock} is used in {@link WispCarrier#steal(WispTask)} .
      */
-    static boolean switchTo(WispTask current, WispTask next) {
+    static boolean switchTo(WispTask current, WispTask next, boolean terminal) {
         assert next.ctx != null;
         assert WispCarrier.current() == current.carrier;
         assert current.carrier == next.carrier;
@@ -321,7 +323,14 @@ public class WispTask implements Comparable<WispTask> {
         next.from = current;
         STEAL_LOCK_UPDATER.lazySet(next, 1);
         // store load barrier is not necessary
-        boolean res = current.carrier.thread.getCoroutineSupport().unsafeSymmetricYieldTo(next.ctx);
+        boolean res = false;
+        if (terminal == true) {
+            current.carrier.thread.getCoroutineSupport().terminateCoroutine(next.ctx);
+            // should never run here.
+            assert false: "should not reach here";
+        } else {
+            res = current.carrier.thread.getCoroutineSupport().unsafeSymmetricYieldTo(next.ctx);
+        }
         assert current.stealLock != 0;
         STEAL_LOCK_UPDATER.lazySet(current.from, 0);
         assert WispCarrier.current() == current.carrier;
@@ -374,7 +383,7 @@ public class WispTask implements Comparable<WispTask> {
     static final String SHUTDOWN_TASK_NAME = "SHUTDOWN_TASK";
 
     boolean isAlive() {
-        return status != Status.ZOMBIE;
+        return status == Status.ALIVE;
     }
 
     /**
@@ -411,7 +420,7 @@ public class WispTask implements Comparable<WispTask> {
                     try {
                         if (WispEngine.runningAsCoroutine(threadWrapper)) {
                             setParkTime();
-                            carrier.schedule();
+                            carrier.schedule(false);
                         } else {
                             UA.park0(false, timeoutNano < 0 ? 0 : timeoutNano);
                         }
