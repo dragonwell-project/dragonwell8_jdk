@@ -671,9 +671,6 @@ class ServerSocket implements java.io.Closeable {
      * @spec JSR-51
      */
     public ServerSocketChannel getChannel() {
-        if (WispEngine.transparentWispSwitch())
-            return asyncImpl.getChannel();
-
         return null;
     }
 

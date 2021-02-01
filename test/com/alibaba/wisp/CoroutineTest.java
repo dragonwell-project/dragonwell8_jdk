@@ -27,8 +27,6 @@
  */
 
 import java.dyn.Coroutine;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
 
 /**
  * test low level coroutine implement
