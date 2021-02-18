@@ -30,6 +30,8 @@ import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 
+import com.alibaba.wisp.engine.WispTask.Status;
+
 /**
  * {@link WispCarrier} schedules all {@link WispTask} on according worker and control their life cycle
  * {@link WispCarrier} exposed its scheduling function for wisp inner usage and maintained all thread local
@@ -44,7 +46,7 @@ final class WispCarrier implements Comparable<WispCarrier> {
             AtomicIntegerFieldUpdater.newUpdater(WispEngine.class, "runningTaskCount");
 
     /**
-     * The user can only can only get thread-specific carrier by calling this method.
+     * The user can only get thread-specific carrier by calling this method.
      * <p>
      * We can not use ThreadLocal any more, because if transparentAsync, it behaves as a coroutine local.
      *
@@ -85,7 +87,7 @@ final class WispCarrier implements Comparable<WispCarrier> {
     private WispCarrier(WispEngine engine) {
         thread = WispEngine.JLA.currentThread0();
         this.engine = engine;
-        CoroutineSupport cs = thread.getCoroutineSupport();
+        CoroutineSupport cs = WispEngine.JLA.getCoroutineSupport(thread);
         current = threadTask = new WispTask(this,
                 cs == null ? null : cs.threadCoroutine(),
                 cs != null, true);
@@ -106,7 +108,7 @@ final class WispCarrier implements Comparable<WispCarrier> {
     }
 
     /**
-     * @return Currently running WispTask. Ensured by {@link #yieldTo(WispTask)}
+     * @return Currently running WispTask. Ensured by {@link #yieldTo(WispTask, boolean)}
      * If calling in a non-coroutine environment, return a thread-emulated WispTask.
      */
     WispTask getCurrentTask() {
@@ -146,7 +148,7 @@ final class WispCarrier implements Comparable<WispCarrier> {
             isInCritical = isInCritical0;
         }
         wispTask.enterTs = System.nanoTime();
-        yieldTo(wispTask);
+        yieldTo(wispTask, false);
         runWispTaskEpilog();
 
         return wispTask;
@@ -157,14 +159,17 @@ final class WispCarrier implements Comparable<WispCarrier> {
      * WispTask must call {@code taskExit()} to exit safely.
      */
     void taskExit() { // and exit
-        current.status = WispTask.Status.ZOMBIE;
-        TASK_COUNT_UPDATER.decrementAndGet(engine);
-
         current.countExecutionTime(switchTimestamp);
         switchTimestamp = 0;
 
         unregisterEvent();
-        returnTaskToCache(current);
+        boolean cached = returnTaskToCache(current);
+        TASK_COUNT_UPDATER.decrementAndGet(engine);
+        if (cached) {
+            current.status = WispTask.Status.CACHED;
+        } else {
+            current.status = WispTask.Status.DEAD;
+        }
 
         // reset threadWrapper after call returnTaskToCache,
         // since the threadWrapper will be used in Thread.currentThread()
@@ -174,7 +179,7 @@ final class WispCarrier implements Comparable<WispCarrier> {
         // In Tenant killing process, we have an pending exception,
         // WispTask.Coroutine's loop will be breaked
         // invoke an explicit reschedule instead of return
-        schedule();
+        schedule(!cached);
     }
 
     /**
@@ -203,16 +208,22 @@ final class WispCarrier implements Comparable<WispCarrier> {
     }
 
     /**
-     * return task back to global cache
+     * cache task back to global or local cache and return true, if beyond the capacity of
+     * cache will return false.
      */
-    private void returnTaskToCache(WispTask task) {
+    private boolean returnTaskToCache(WispTask task) {
         // reuse exited wispTasks from shutdown wispEngine is very tricky, so we'd better not return
         // these tasks to global cache
         if (taskCache.size() > WispConfiguration.WISP_ENGINE_TASK_CACHE_SIZE && !engine.hasBeenShutdown) {
-            engine.groupTaskCache.add(task);
+            if (engine.groupTaskCache.size() > WispConfiguration.WISP_ENGINE_TASK_GLOBAL_CACHE_SIZE) {
+                return false;
+            } else {
+                engine.groupTaskCache.add(task);
+            }
         } else {
             taskCache.add(task);
         }
+        return true;
     }
 
     /**
@@ -234,21 +245,33 @@ final class WispCarrier implements Comparable<WispCarrier> {
     /**
      * Block current coroutine and do scheduling.
      * Typically called when resource is not ready.
+     * @param terminal indicate terminal current coroutine.
      */
-    final void schedule() {
+    final void schedule(boolean terminal) {
         assert WispCarrier.current() == this;
-        assert current.enterTs != 0;
         WispTask current = this.current;
         current.countExecutionTime(switchTimestamp);
-        current.totalTs += System.nanoTime() -  current.enterTs;
-        current.enterTs = 0;
-        assert current != threadTask;
-        assert current.resumeEntry != null : "call `schedule()` in scheduler";
+        assert current.resumeEntry != null && current != threadTask
+                : "call `schedule()` in scheduler";
+        if (current.controlGroup != null) {
+            current.totalTs +=  current.controlGroup.calcCpuTicks(current);
+        } else {
+            current.totalTs += System.nanoTime() -  current.enterTs;
+            current.enterTs = 0;
+        }
         current.resumeEntry.setStealEnable(true);
-        yieldTo(threadTask); // letting the scheduler choose runnable task
-        if (engine.hasBeenShutdown && current != threadTask
-                && !WispTask.SHUTDOWN_TASK_NAME.equals(current.getName())) {
-            CoroutineSupport.checkAndThrowException(current.ctx);
+        yieldTo(threadTask, terminal); // letting the scheduler choose runnable task
+        current.carrier.checkAndDispatchShutdown();
+    }
+
+    private void checkAndDispatchShutdown() {
+        assert WispCarrier.current() == this;
+        if ((engine.hasBeenShutdown
+                || (current.inDestoryedGroup() && current.inheritedFromNonRootContainer()))
+                && !WispTask.SHUTDOWN_TASK_NAME.equals(current.getName())
+                && current.isAlive()
+                && CoroutineSupport.checkAndThrowException(current.ctx)) {
+            throw new ThreadDeath();
         }
     }
 
@@ -294,15 +317,23 @@ final class WispCarrier implements Comparable<WispCarrier> {
                         source.wakeupTask(task);
                         return;
                     }
-                    // notify detached empty worker to exit
+                    // notify terminated empty worker to exit
                     if (source.worker.hasBeenHandoff && TASK_COUNT_UPDATER.get(source.engine) == 0) {
                         source.worker.signal();
                     }
                 }
                 current.countEnqueueTime(task.getEnqueueTime());
                 task.resetEnqueueTime();
-                task.enterTs = System.nanoTime();
-                if (current.yieldTo(task)) {
+                if (task.controlGroup != null) {
+                    long res = task.controlGroup.checkCpuLimit(task, false);
+                    if (res != 0) {
+                        current.resumeLater(System.nanoTime() + res, task);
+                        return;
+                    }
+                } else {
+                    task.enterTs = System.nanoTime();
+                }
+                if (current.yieldTo(task, false)) {
                     current.runWispTaskEpilog();
                 } else { // switch failure
                     // this is unexpected, record in counter to help troubleshooting.
@@ -364,9 +395,9 @@ final class WispCarrier implements Comparable<WispCarrier> {
      * The ONLY entry point to a task,
      * {@link #current} will be set correctly
      *
-     * @param task coroutine to run
+     * @param terminal indicates terminal current coroutine
      */
-    private boolean yieldTo(WispTask task) {
+    private boolean yieldTo(WispTask task, boolean terminal) {
         assert task != null;
         assert WispCarrier.current() == this;
         assert task.carrier == this;
@@ -374,7 +405,7 @@ final class WispCarrier implements Comparable<WispCarrier> {
 
         schedTick++;
 
-        if (task.status == WispTask.Status.ZOMBIE) {
+        if (!task.isAlive()) {
             unregisterEvent(task);
             return false;
         }
@@ -384,7 +415,7 @@ final class WispCarrier implements Comparable<WispCarrier> {
         counter.incrementSwitchCount();
         switchTimestamp = WispEngine.getNanoTime();
         assert !isInCritical;
-        boolean res = WispTask.switchTo(from, task);
+        boolean res = WispTask.switchTo(from, task, terminal);
         assert res : "coroutine switch failure";
         // Since carrier is changed with stealing,
         // we shouldn't directly access carrier's member any more.
@@ -404,12 +435,20 @@ final class WispCarrier implements Comparable<WispCarrier> {
             worker.processTimer();
         }
         if (WispEngine.runningAsCoroutine(current.getThreadWrapper())) {
-            if (getTaskQueueLength() > 0) {
+            boolean withControlGroup = current.controlGroup != null;
+            boolean quotaExhausted = false;
+            int len = getTaskQueueLength();
+            if (len == 0 && withControlGroup) {
+                current.controlGroup.calcCpuTicks(current);
+                quotaExhausted = current.controlGroup.checkCpuLimit(current, true) != 0;
+            }
+            if (len > 0 || (withControlGroup && quotaExhausted)) {
                 assert yieldingTask == null;
                 yieldingTask = current;
                 // delay it, make sure wakeupTask is called after yield out
-                schedule();
+                schedule(false);
             }
+            current.carrier.checkAndDispatchShutdown();
         } else {
             WispEngine.JLA.yield0();
         }
@@ -433,7 +472,7 @@ final class WispCarrier implements Comparable<WispCarrier> {
      * <pre>
      *     while (!ch.read(buf) == 0) { // 0 indicate IO not ready, not EOF..
      *         registerEvent(ch, OP_READ);
-     *         schedule();
+     *         schedule(false);
      *     }
      *     // read is done here
      * <pre/>
@@ -476,13 +515,24 @@ final class WispCarrier implements Comparable<WispCarrier> {
      * Add a timer for current {@link WispTask},
      * used for implementing timed IO operation / sleep etc...
      *
-     * @param deadlineNano deadline of the timer
-     * @param fromJvm      synchronized or obj.wait()
+     * @param deadlineNano        deadline of the timer
+     * @param action      JVM_UNPARK/JDK_UNPARK/RESUME
      */
-    void addTimer(long deadlineNano, boolean fromJvm) {
+    void addTimer(long deadlineNano, TimeOut.Action action) {
         WispTask task = current;
-        TimeOut timeOut = new TimeOut(task, deadlineNano, fromJvm);
-        task.timeOut = timeOut;
+        addTimerInternal(deadlineNano, task, action, true);
+    }
+
+    private void resumeLater(long deadlineNano, WispTask task) {
+        assert task != null;
+        addTimerInternal(deadlineNano, task, TimeOut.Action.RESUME, false);
+    }
+
+    private void addTimerInternal(long deadlineNano, WispTask task, TimeOut.Action action, boolean refTimeOut) {
+        TimeOut timeOut = new TimeOut(task, deadlineNano, action);
+        if (refTimeOut) {
+            task.timeOut = timeOut;
+        }
 
         if (WispConfiguration.WISP_HIGH_PRECISION_TIMER) {
             if (task.isThreadTask()) {
@@ -501,7 +551,7 @@ final class WispCarrier implements Comparable<WispCarrier> {
     }
 
     /**
-     * Cancel the timer added by {@link #addTimer(long, boolean)}.
+     * Cancel the timer added by {@link #addTimer(long, TimeOut.Action action)}.
      */
     void cancelTimer() {
         if (current.timeOut != null) {
@@ -531,7 +581,7 @@ final class WispCarrier implements Comparable<WispCarrier> {
                 @Override
                 public void run() {
                     if (!timeOut.canceled) {
-                        timeOut.doUnpark();
+                        timeOut.doAction();
                     }
                 }
             }, timeout, TimeUnit.NANOSECONDS);

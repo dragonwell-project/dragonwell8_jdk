@@ -24,6 +24,9 @@ package com.alibaba.wisp.engine;
 import sun.misc.SharedSecrets;
 import sun.misc.UnsafeAccess;
 
+import com.alibaba.rcm.ResourceContainer;
+import com.alibaba.rcm.internal.AbstractResourceContainer;
+
 import java.dyn.Coroutine;
 import java.dyn.CoroutineExitException;
 import java.nio.channels.SelectableChannel;
@@ -109,7 +112,8 @@ public class WispTask implements Comparable<WispTask> {
 
     enum Status {
         ALIVE,      // ALIVE
-        ZOMBIE      // exited
+        CACHED,     // exited
+        DEAD        // quited and never be used
     }
 
     private Runnable runnable; // runnable for created task
@@ -146,6 +150,7 @@ public class WispTask implements Comparable<WispTask> {
     int stealCount;
     int stealFailureCount;
     private int preemptCount;
+    long ttr;
     // perf monitor
     private long enqueueTime;
     private long parkTime;
@@ -158,6 +163,8 @@ public class WispTask implements Comparable<WispTask> {
     private volatile long epollArray;
     private volatile int epollEventNum;
     int epollArraySize;
+
+    WispControlGroup controlGroup;
 
     WispTask(WispCarrier carrier, Coroutine ctx, boolean isRealTask, boolean isThreadTask) {
         this.isThreadTask = isThreadTask;
@@ -177,6 +184,7 @@ public class WispTask implements Comparable<WispTask> {
         this.status       = Status.ALIVE;
         this.runnable     = runnable;
         this.name         = name;
+        this.controlGroup = null;
         interrupted       = 0;
         ctxClassLoader    = ctxLoader;
         ch                = null;
@@ -237,11 +245,13 @@ public class WispTask implements Comparable<WispTask> {
                 if (runnable != null) {
                     Throwable throwable = null;
                     try {
-                        runOutsideWisp(runnable);
+                        runCommand();
                     } catch (Throwable t) {
+                        dispatchUncaughtException(t);
                         throwable = t;
                     } finally {
                         assert timeOut == null;
+                        assert controlGroup == null; // detached
                         runnable = null;
                         WispEngine.JLA.setWispAlive(threadWrapper, false);
                         if (isThreadAsWisp) {
@@ -251,11 +261,35 @@ public class WispTask implements Comparable<WispTask> {
                             throw (CoroutineExitException) throwable;
                         }
                         carrier.taskExit();
+
                     }
                 } else {
-                    carrier.schedule();
+                    carrier.schedule(false);
                 }
             }
+        }
+    }
+
+    private void runCommand() {
+        ResourceContainer rc = WispEngine.JLA.getInheritedResourceContainer(threadWrapper);
+        if (rc != null) {
+            rc.run(wrapRunOutsideWisp(runnable));
+        } else {
+            runOutsideWisp(runnable);
+        }
+    }
+
+    private void dispatchUncaughtException(Throwable t) {
+        try {
+            threadWrapper.getUncaughtExceptionHandler()
+                    .uncaughtException(threadWrapper, t);
+        } catch (Throwable e) {
+            // the default error log is generated with the format
+            // from hotspot JavaThread::exit
+            String defaultErrorLog = String.format(
+                    "\nException: %s thrown from the UncaughtExceptionHandler in thread \"%s\"",
+                    e.getClass().getName(), threadWrapper.getName());
+            System.err.println(defaultErrorLog);
         }
     }
 
@@ -265,17 +299,22 @@ public class WispTask implements Comparable<WispTask> {
      * Modify Coroutine::is_usermark_frame accordingly if you need to change this
      * method, because it's name and sig are used
      */
-    private static void runOutsideWisp(Runnable runnable) {
+    static void runOutsideWisp(Runnable runnable) {
         runnable.run();
+    }
+
+    static Runnable wrapRunOutsideWisp(Runnable runnable) {
+        return () -> runOutsideWisp(runnable);
     }
 
     /**
      * Switch task. we need the information of {@code from} task param
      * to do classloader switch etc..
      * <p>
+     * @param terminal indicate terminal current coroutine
      * {@link #stealLock} is used in {@link WispCarrier#steal(WispTask)} .
      */
-    static boolean switchTo(WispTask current, WispTask next) {
+    static boolean switchTo(WispTask current, WispTask next, boolean terminal) {
         assert next.ctx != null;
         assert WispCarrier.current() == current.carrier;
         assert current.carrier == next.carrier;
@@ -284,7 +323,15 @@ public class WispTask implements Comparable<WispTask> {
         next.from = current;
         STEAL_LOCK_UPDATER.lazySet(next, 1);
         // store load barrier is not necessary
-        boolean res = current.carrier.thread.getCoroutineSupport().unsafeSymmetricYieldTo(next.ctx);
+        assert current.carrier.thread == WispEngine.JLA.currentThread0();
+        boolean res = false;
+        if (terminal == true) {
+            WispEngine.JLA.getCoroutineSupport(current.carrier.thread).terminateCoroutine(next.ctx);
+            // should never run here.
+            assert false: "should not reach here";
+        } else {
+            res = WispEngine.JLA.getCoroutineSupport(current.carrier.thread).unsafeSymmetricYieldTo(next.ctx);
+        }
         assert current.stealLock != 0;
         STEAL_LOCK_UPDATER.lazySet(current.from, 0);
         assert WispCarrier.current() == current.carrier;
@@ -337,7 +384,7 @@ public class WispTask implements Comparable<WispTask> {
     static final String SHUTDOWN_TASK_NAME = "SHUTDOWN_TASK";
 
     boolean isAlive() {
-        return status != Status.ZOMBIE;
+        return status == Status.ALIVE;
     }
 
     /**
@@ -368,13 +415,13 @@ public class WispTask implements Comparable<WispTask> {
                     // current task is put to unpark queue,
                     // and will wake up eventually
                     if (WispEngine.runningAsCoroutine(threadWrapper) && timeoutNano > 0) {
-                        carrier.addTimer(timeoutNano + System.nanoTime(), fromJvm);
+                        carrier.addTimer(timeoutNano + System.nanoTime(), fromJvm ? TimeOut.Action.JVM_UNPARK : TimeOut.Action.JDK_UNPARK);
                     }
                     carrier.isInCritical = isInCritical0;
                     try {
                         if (WispEngine.runningAsCoroutine(threadWrapper)) {
                             setParkTime();
-                            carrier.schedule();
+                            carrier.schedule(false);
                         } else {
                             UA.park0(false, timeoutNano < 0 ? 0 : timeoutNano);
                         }
@@ -469,6 +516,14 @@ public class WispTask implements Comparable<WispTask> {
 
     boolean isInterrupted() {
         return interrupted != 0;
+    }
+
+    boolean inDestoryedGroup() {
+        return controlGroup != null && controlGroup.destroyed;
+    }
+
+    boolean inheritedFromNonRootContainer() {
+        return WispEngine.JLA.getInheritedResourceContainer(threadWrapper) != ResourceContainer.root();
     }
 
     boolean testInterruptedAndClear(boolean clear) {

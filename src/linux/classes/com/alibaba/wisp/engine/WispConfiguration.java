@@ -56,6 +56,7 @@ class WispConfiguration {
 
     static final boolean WISP_HIGH_PRECISION_TIMER;
     static final int WISP_ENGINE_TASK_CACHE_SIZE;
+    static final int WISP_ENGINE_TASK_GLOBAL_CACHE_SIZE;
     static final int WISP_SCHEDULE_STEAL_RETRY;
     static final int WISP_SCHEDULE_PUSH_RETRY;
     static final int WISP_SCHEDULE_HELP_STEAL_RETRY;
@@ -68,8 +69,10 @@ class WispConfiguration {
     // io
     static final boolean WISP_ENABLE_SOCKET_LOCK;
 
-    private static List<String> THREAD_AS_WISP_BLACKLIST;
+    // wisp control group
+    static final int WISP_CONTROL_GROUP_CFS_PERIOD;
 
+    private static List<String> THREAD_AS_WISP_BLACKLIST;
 
     static {
         Properties p = java.security.AccessController.doPrivileged(
@@ -115,6 +118,7 @@ class WispConfiguration {
         MONOLITHIC_POLL = parseBooleanParameter(p, "com.alibaba.wisp.monolithicPoll", true);
         WISP_HIGH_PRECISION_TIMER = parseBooleanParameter(p, "com.alibaba.wisp.highPrecisionTimer", false);
         WISP_ENGINE_TASK_CACHE_SIZE = parsePositiveIntegerParameter(p, "com.alibaba.wisp.engineTaskCache", 20);
+        WISP_ENGINE_TASK_GLOBAL_CACHE_SIZE = parsePositiveIntegerParameter(p, "com.alibaba.wisp.engineTaskGlobalCache", WORKER_COUNT * 10);
         WISP_SCHEDULE_STEAL_RETRY = parsePositiveIntegerParameter(p, "com.alibaba.wisp.schedule.stealRetry", Math.max(1, WORKER_COUNT / 2));
         WISP_SCHEDULE_PUSH_RETRY = parsePositiveIntegerParameter(p, "com.alibaba.wisp.schedule.pushRetry", WORKER_COUNT);
         WISP_SCHEDULE_HELP_STEAL_RETRY = parsePositiveIntegerParameter(p, "com.alibaba.wisp.schedule.helpStealRetry", Math.max(1, WORKER_COUNT / 4));
@@ -124,6 +128,9 @@ class WispConfiguration {
         WISP_ENABLE_SOCKET_LOCK = parseBooleanParameter(p, "com.alibaba.wisp.useSocketLock", true);
         CARRIER_GROW = parseBooleanParameter(p, "com.alibaba.wisp.growCarrier", false);
         SYSMON_CARRIER_GROW_TICK_US = parsePositiveIntegerParameter(p, "com.alibaba.wisp.growCarrierTickUs", (int) TimeUnit.SECONDS.toMicros(5));
+        // WISP_CONTROL_GROUP_CFS_PERIOD default value is 0(Us), WispControlGroup will estimate a cfs period according to SYSMON_TICK_US.
+        // If WISP_CONTROL_GROUP_CFS_PERIOD was configed by user, WispControlGroup will adopt it directly and won't estimate.
+        WISP_CONTROL_GROUP_CFS_PERIOD = parsePositiveIntegerParameter(p, "com.alibaba.wisp.controlGroup.cfsPeriod", 0);
         checkCompatibility();
     }
 
@@ -155,7 +162,7 @@ class WispConfiguration {
         }
         int res = defaultVal;
         try {
-            res = Integer.valueOf(value);
+            res = Integer.parseInt(value);
         } catch (NumberFormatException e) {
             return defaultVal;
         }
@@ -167,7 +174,7 @@ class WispConfiguration {
         if (p == null || (value = p.getProperty(key)) == null) {
             return defaultVal;
         }
-        return Boolean.valueOf(value);
+        return Boolean.parseBoolean(value);
     }
 
     private static List<String> parseListParameter(Properties p, Properties confProp, String key) {

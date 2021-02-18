@@ -27,6 +27,7 @@ package java.dyn;
 
 import com.alibaba.wisp.engine.WispTask;
 import sun.misc.Contended;
+import sun.misc.JavaLangAccess;
 import sun.misc.SharedSecrets;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
@@ -39,7 +40,7 @@ public class CoroutineSupport {
     private static final boolean CHECK_LOCK = true;
     private static final int SPIN_BACKOFF_LIMIT = 2 << 8;
 
-    private static AtomicInteger idGen = new AtomicInteger();
+    private final static AtomicInteger idGen = new AtomicInteger();
 
     // The thread that this CoroutineSupport belongs to. There's only one CoroutineSupport per Thread
     private final Thread thread;
@@ -60,7 +61,8 @@ public class CoroutineSupport {
     }
 
     public CoroutineSupport(Thread thread) {
-        if (thread.getCoroutineSupport() != null) {
+        JavaLangAccess jla = SharedSecrets.getJavaLangAccess();
+        if (jla != null && jla.getCoroutineSupport(thread) != null) {
             throw new IllegalArgumentException("Cannot instantiate CoroutineThreadSupport for existing Thread");
         }
         id = idGen.incrementAndGet();
@@ -88,8 +90,8 @@ public class CoroutineSupport {
         return thread;
     }
 
-    public static void checkAndThrowException(Coroutine coroutine) {
-        checkAndThrowException0(coroutine.nativeCoroutine);
+    public static boolean checkAndThrowException(Coroutine coroutine) {
+        return shouldThrowException0(coroutine.nativeCoroutine);
     }
 
     public void drain() {
@@ -125,7 +127,7 @@ public class CoroutineSupport {
      * 2. we won't switch to a {@link Coroutine} that's being stolen
      * 3. we won't steal a running {@link Coroutine}
      * this function should only be called in
-     * {@link com.alibaba.wisp.engine.WispTask#switchTo(WispTask, WispTask)},
+     * {@link com.alibaba.wisp.engine.WispTask#switchTo(WispTask, WispTask, boolean)},
      * we skipped unnecessary lock to improve performance.
      * @param target
      */
@@ -188,21 +190,26 @@ public class CoroutineSupport {
         }
     }
 
-
     /**
      * terminate current coroutine and yield forward
      */
-    void terminateCoroutine() {
+    public void terminateCoroutine(Coroutine target) {
         assert currentCoroutine != threadCoroutine : "cannot exit thread coroutine";
-        assert currentCoroutine != getNextCoroutine(currentCoroutine.nativeCoroutine) : "last coroutine shouldn't call coroutineexit";
+        assert currentCoroutine != getNextCoroutine(currentCoroutine.nativeCoroutine) :
+                "last coroutine shouldn't call coroutineexit";
 
         lock();
         Coroutine old = currentCoroutine;
-        Coroutine forward = getNextCoroutine(old.nativeCoroutine);
+        Coroutine forward = target;
+        if (forward == null) {
+            forward = getNextCoroutine(old.nativeCoroutine);
+        }
         currentCoroutine = forward;
-
         unlockLater(forward);
         switchToAndTerminate(old, forward);
+
+        // should never run here.
+        assert false;
     }
 
     /**
@@ -215,7 +222,8 @@ public class CoroutineSupport {
     Coroutine.StealResult steal(Coroutine coroutine, boolean failOnContention) {
         assert coroutine.threadSupport.threadCoroutine() != coroutine;
         CoroutineSupport source = this;
-        CoroutineSupport target = SharedSecrets.getJavaLangAccess().currentThread0().getCoroutineSupport();
+        JavaLangAccess jla = SharedSecrets.getJavaLangAccess();
+        CoroutineSupport target = jla.getCoroutineSupport(jla.currentThread0());
 
         if (source == target) {
             return Coroutine.StealResult.SUCCESS;
@@ -371,10 +379,9 @@ public class CoroutineSupport {
 
     /**
      * this will turn on a safepoint to stop all threads.
-     * @param coroPtr
+     * @param coroPtr coroutine pointer used in VM.
      * @return target coroutine's stack
      */
     public static native StackTraceElement[] getCoroutineStack(long coroPtr);
 
-    private static native void checkAndThrowException0(long coroPtr);
-}
+    private static native boolean shouldThrowException0(long coroPtr);}
