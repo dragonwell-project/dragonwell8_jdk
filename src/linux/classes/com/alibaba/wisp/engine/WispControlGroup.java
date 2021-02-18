@@ -110,7 +110,7 @@ class WispControlGroup extends AbstractExecutorService {
      *                  to update this field despite there is no time slice left
      *                  under some special scenes.
      * @return x == 0: if it's ok to run the task; x > 0, quota exceed, need to
-     *         delay x nanoseconds.
+     * delay x nanoseconds.
      */
     long checkCpuLimit(WispTask task, boolean updateTs) {
         assert task.controlGroup == this;
@@ -320,6 +320,18 @@ class WispControlGroup extends AbstractExecutorService {
             protected void detach() {
                 WispControlGroup.this.detach();
                 super.detach();
+            }
+
+            @Override
+            protected void killThreads() {
+                shutdown();
+                while (!isTerminated()) {
+                    try {
+                        awaitTermination(1, TimeUnit.SECONDS);
+                    } catch (InterruptedException e) {
+                        throw new InternalError(e);
+                    }
+                }
             }
         };
     }

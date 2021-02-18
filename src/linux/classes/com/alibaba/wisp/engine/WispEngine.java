@@ -546,7 +546,7 @@ public class WispEngine extends AbstractExecutorService {
                     }
                 }
                 // wait tasks to exit on fixed frequency instead of polling
-                WispTask.jdkPark(TimeUnit.MILLISECONDS.toNanos(1));
+                WispTask.jdkPark(TimeUnit.MILLISECONDS.toNanos(WispConfiguration.WISP_SHUTDOWN_SLEEP_TIME));
             } while (!tasks.isEmpty());
             finishShutdown();
         }

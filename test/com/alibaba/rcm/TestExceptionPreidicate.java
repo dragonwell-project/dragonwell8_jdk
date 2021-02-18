@@ -1,4 +1,4 @@
-package com.alibaba.rcm;/*
+/*
  * @test
  * @library /lib/testlibrary
  * @build TestExceptionPreidicate RcmUtils

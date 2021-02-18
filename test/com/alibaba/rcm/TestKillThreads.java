@@ -1,9 +1,12 @@
-package com.alibaba.rcm;/*
+/*
  * @test
  * @library /lib/testlibrary
  * @build TestKillThreads RcmUtils
  * @summary test RCM TestKillThreads control.
- * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -XX:ActiveProcessorCount=4 TestKillThreads 
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -XX:+Wisp2ThreadStop -XX:ActiveProcessorCount=4 TestKillThreads
+ * @run main/othervm -Xcomp -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -XX:+Wisp2ThreadStop -XX:ActiveProcessorCount=4 TestKillThreads
+ * @run main/othervm -Xint -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -XX:+Wisp2ThreadStop -XX:ActiveProcessorCount=4 TestKillThreads
+ * @run main/othervm -client -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -XX:+Wisp2ThreadStop -XX:ActiveProcessorCount=4 TestKillThreads
  */
 import com.alibaba.rcm.ResourceContainer;
 import com.alibaba.rcm.ResourceType;
@@ -116,6 +119,23 @@ public class TestKillThreads {
         }
     };
 
+    private static Runnable OVERRIDE = () -> {
+        while (true) {
+            started = 1;
+            try {
+                try {
+                    Thread.sleep(200);
+                } finally {
+                    throw new Exception("123");
+                }
+
+            } catch (Throwable t) {
+                t.printStackTrace();
+            }
+
+        }
+    };
+
 
     private static final List<Runnable> workload = new ArrayList<Runnable>() {{
         add(VOID_LOOP);
@@ -125,6 +145,7 @@ public class TestKillThreads {
         add(TIMER);
         add(UPDATER);
         add(POLL);
+        add(OVERRIDE);
     }};
 
     public static void main(String[] args) throws Exception {

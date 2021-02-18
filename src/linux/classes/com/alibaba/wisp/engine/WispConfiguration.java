@@ -46,6 +46,8 @@ class WispConfiguration {
     static final int SYSMON_TICK_US;
     static final int MIN_PARK_NANOS;
     static final int POLLER_SHARDING_SIZE;
+    static final int WISP_SHUTDOWN_SLEEP_TIME;
+
 
     static final int SYSMON_CARRIER_GROW_TICK_US;
     // monitor
@@ -94,6 +96,8 @@ class WispConfiguration {
         PARK_ONE_MS_AT_LEAST = parseBooleanParameter(p, "com.alibaba.wisp.parkOneMs", true);
         WORKER_COUNT = parsePositiveIntegerParameter(p, "com.alibaba.wisp.carrierEngines",
                 Runtime.getRuntime().availableProcessors());
+        WISP_SHUTDOWN_SLEEP_TIME = parsePositiveIntegerParameter(p, "com.alibaba.wisp.shutdownSleepTime",
+                100);
         POLLER_SHARDING_SIZE = parsePositiveIntegerParameter(p, "com.alibaba.pollerShardingSize", 8);
         ENABLE_HANDOFF = parseBooleanParameter(p, "com.alibaba.wisp.enableHandOff",
                 TRANSPARENT_WISP_SWITCH);
