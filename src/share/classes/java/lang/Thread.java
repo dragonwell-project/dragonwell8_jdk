@@ -519,7 +519,11 @@ class Thread implements Runnable {
 
         /* com.alibaba.rcm API */
         this.resourceContainer = AbstractResourceContainer.root();
-        this.inheritedResourceContainer = parent.resourceContainer;
+        if (parent.resourceContainer.getResourceContainerInheritancePredicate().test(this)) {
+            this.inheritedResourceContainer = parent.resourceContainer;
+        } else {
+            this.inheritedResourceContainer = AbstractResourceContainer.root();
+        }
 
         /* Set the tenant container */
         if (VM.isBooted() && TenantGlobals.isTenantEnabled()) {

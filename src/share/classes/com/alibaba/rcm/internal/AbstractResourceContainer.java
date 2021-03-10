@@ -30,6 +30,7 @@ import sun.misc.SharedSecrets;
 import sun.misc.VM;
 
 import java.util.Collections;
+import java.util.function.Predicate;
 
 /**
  * A skeletal implementation of {@link ResourceContainer} that practices
@@ -41,8 +42,21 @@ import java.util.Collections;
  */
 
 public abstract class AbstractResourceContainer implements ResourceContainer {
+    private static final Predicate<Thread> DEFAULT_PREDICATE = new Predicate<Thread>() {
+        @Override
+        public boolean test(Thread thread) {
+            return true;
+        }
+    };
+
+
+    public Predicate<Thread> getResourceContainerInheritancePredicate() {
+        return threadInherited;
+    }
+
 
     protected final static AbstractResourceContainer ROOT = new RootContainer();
+    private Predicate<Thread> threadInherited = DEFAULT_PREDICATE;
     final long id;
 
     protected AbstractResourceContainer() {
@@ -110,6 +124,15 @@ public abstract class AbstractResourceContainer implements ResourceContainer {
     protected void detach() {
         SharedSecrets.getJavaLangAccess().setResourceContainer(Thread.currentThread(), root());
     }
+
+    void setUnsafeThreadInheritancePredicate(Predicate<Thread> predicate) {
+        this.threadInherited = predicate;
+    }
+
+    protected void killThreads() {
+        throw new UnsupportedOperationException("should not reach here");
+    }
+
 
     private static class RootContainer extends AbstractResourceContainer {
         @Override
