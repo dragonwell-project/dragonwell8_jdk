@@ -13,12 +13,14 @@ import javax.management.MBeanServer;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.util.Collections;
+
 import com.alibaba.wisp.engine.WispResourceContainerFactory;
 
 import static jdk.testlibrary.Asserts.*;
 
 public class RcmMXBeanTest {
     static ResourceContainerMXBean resourceContainerMXBean;
+    static int containers = Integer.parseInt(System.getProperty("container", "10"));
 
     public static void main(String[] args) throws Exception {
         MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
@@ -29,10 +31,11 @@ public class RcmMXBeanTest {
             e.printStackTrace();
         }
 
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < containers; i++) {
             ResourceContainer rc1 = WispResourceContainerFactory.instance()
-                    .createContainer(Collections.singletonList(ResourceType.CPU_PERCENT.newConstraint(80)));
+                    .createContainer(Collections.singletonList(ResourceType.CPU_PERCENT.newConstraint(20)));
 
+            final int idx = i;
             rc1.run(() -> {
                 new Thread(() -> {
                     while (true) {
@@ -43,17 +46,21 @@ public class RcmMXBeanTest {
             Thread.sleep(1000);
         }
 
-        assertTrue(resourceContainerMXBean.getAllContainerIds().size() == 4);
+        assertTrue(resourceContainerMXBean.getAllContainerIds().size() == containers + 1);
 
-
+        int resourceLimitReachedCnt = 0;
         for (long id : resourceContainerMXBean.getAllContainerIds()) {
             if (id != 0) {
                 assertTrue(resourceContainerMXBean.getConstraintsById(id).size() == 1);
-                assertEQ(resourceContainerMXBean.getConstraintsById(id).get(0), 80L);
+                assertEQ(resourceContainerMXBean.getConstraintsById(id).get(0), 20L);
                 assertGreaterThan(resourceContainerMXBean.getCPUResourceConsumedAmount(id), 0L);
+                assertFalse(resourceContainerMXBean.getActiveContainerThreadIds(id).isEmpty());
             } else {
                 assertTrue(resourceContainerMXBean.getConstraintsById(id).isEmpty());
             }
+            if (resourceContainerMXBean.getCPUResourceLimitReachedCount(id) != 0)
+                resourceLimitReachedCnt++;
         }
+        assertGreaterThan(resourceLimitReachedCnt, 0);
     }
 }
