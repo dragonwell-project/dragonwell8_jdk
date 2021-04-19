@@ -56,9 +56,6 @@ public abstract class CoroutineBase {
     private final void startInternal() {
         assert threadSupport.getThread() == SharedSecrets.getJavaLangAccess().currentThread0();
         try {
-            // When we symmetricYieldTo a newly created coroutine,
-            // we'll expect the new coroutine release lock as soon as possible
-            threadSupport.beforeResume(this);
             run();
         } catch (Throwable t) {
             if (!(t instanceof CoroutineExitException)) {
@@ -66,9 +63,6 @@ public abstract class CoroutineBase {
             }
         } finally {
             finished = true;
-            // threadSupport is fixed by steal()
-            threadSupport.beforeResume(this);
-
             threadSupport.terminateCoroutine(null);
         }
         assert threadSupport.getThread() == SharedSecrets.getJavaLangAccess().currentThread0();
