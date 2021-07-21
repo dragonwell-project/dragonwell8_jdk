@@ -382,6 +382,11 @@ public class WispEngine extends AbstractExecutorService {
                 }
                 return 0;
             }
+
+            @Override
+            public void markAsWispThread(Thread thread) {
+                ThreadAsWisp.wispTaskAsMark.setThreadWrapper(thread);
+            }
         });
     }
 

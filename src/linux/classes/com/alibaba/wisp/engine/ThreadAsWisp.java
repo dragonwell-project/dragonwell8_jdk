@@ -35,7 +35,8 @@ class ThreadAsWisp {
 
     private static int nonDaemonCount;
     private static Thread preventShutdownThread;
-
+    // for marking thread as wisp.
+    static final WispTask wispTaskAsMark = new WispTask(WispCarrier.current(), null, false, false);
 
     /**
      * Try to "start thread" as wisp if all listed condition is satisfied:
@@ -49,9 +50,10 @@ class ThreadAsWisp {
      * @return if condition is satisfied and thread is started as wisp
      */
     static boolean tryStart(Thread thread, Runnable target, long stackSize) {
-        if (!WispConfiguration.ALL_THREAD_AS_WISP
-                || WispEngine.isEngineThread(thread)
-                || matchBlackList(thread, target)) {
+        if ((WispEngine.JLA.getWispTask(thread) != wispTaskAsMark)
+                && (!WispConfiguration.ALL_THREAD_AS_WISP
+                    || WispEngine.isEngineThread(thread)
+                    || matchBlackList(thread, target))) {
             return false;
         }
 

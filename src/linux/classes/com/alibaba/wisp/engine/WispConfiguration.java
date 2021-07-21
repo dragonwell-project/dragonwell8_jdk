@@ -143,10 +143,6 @@ class WispConfiguration {
                 ENABLE_THREAD_AS_WISP, "-Dcom.alibaba.wisp.enableThreadAsWisp=true");
         checkDependency(CARRIER_AS_POLLER, "-Dcom.alibaba.wisp.useCarrierAsPoller=true",
                 ALL_THREAD_AS_WISP, "-Dcom.alibaba.wisp.allThreadAsWisp=true");
-        if (ENABLE_THREAD_AS_WISP && !ALL_THREAD_AS_WISP) {
-            throw new IllegalArgumentException("shift thread model by stack configuration is no longer supported," +
-                    " use -XX:+UseWisp2 instead");
-        }
     }
 
     private static void checkDependency(boolean cond, String condStr, boolean preRequire, String preRequireStr) {

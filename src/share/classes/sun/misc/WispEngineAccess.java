@@ -93,4 +93,6 @@ public interface WispEngineAccess {
      * @throws IOException
      */
     int poll(SelectableChannel channel, int interestOps, long timeout) throws IOException;
+
+    void markAsWispThread(Thread thread);
 }
