@@ -24,14 +24,10 @@ package com.alibaba.tenant;
 import com.alibaba.rcm.Constraint;
 import com.alibaba.rcm.ResourceType;
 import com.alibaba.rcm.internal.AbstractResourceContainer;
-
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
-
-import static com.alibaba.tenant.TenantState.RUNNING;
-import static com.alibaba.tenant.TenantState.STARTING;
+import static com.alibaba.tenant.TenantState.*;
 
 class TenantResourceContainer extends AbstractResourceContainer {
 
@@ -69,7 +65,7 @@ class TenantResourceContainer extends AbstractResourceContainer {
     }
 
     // cached constraints
-    private final Map<ResourceType, Constraint> constraints;
+    private Map<ResourceType, Constraint> constraints;
 
     /*
      * The parent container.
@@ -96,16 +92,6 @@ class TenantResourceContainer extends AbstractResourceContainer {
 
     TenantContainer getTenant() {
         return this.tenant;
-    }
-
-    @Override
-    public Properties getProperties() {
-        return tenant.getProperties();
-    }
-
-    @Override
-    public void setProperties(Properties props) {
-        tenant.setProperties(props);
     }
 
     @Override
@@ -149,9 +135,10 @@ class TenantResourceContainer extends AbstractResourceContainer {
     public void updateConstraint(Constraint constraint) {
         Constraint c = translate(constraint);
         if (c.getResourceType() instanceof TenantResourceType) {
-            TenantResourceType type = (TenantResourceType) c.getResourceType();
-            if (type.isJGroupResource() && jgroup != null) {
-                ((JGroupConstraint) c).sync(jgroup);
+            TenantResourceType type = (TenantResourceType)c.getResourceType();
+            if (type.isJGroupResource()
+                    && jgroup != null) {
+                ((JGroupConstraint)c).sync(jgroup);
             }
         }
         constraints.put(c.getResourceType(), c);
@@ -188,7 +175,7 @@ class TenantResourceContainer extends AbstractResourceContainer {
 
     // exposed to TenantContainer implementation
     long getProcessCpuTime() {
-        if (jgroup != null) {
+        if ( jgroup != null) {
             return jgroup.getCpuTime();
         }
         return 0;

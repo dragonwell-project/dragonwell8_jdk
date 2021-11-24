@@ -22,8 +22,6 @@
 
 package com.alibaba.rcm;
 
-import java.util.Objects;
-
 /**
  * Enumeration of {@link Constraint}'s type.
  * <p>
@@ -56,10 +54,9 @@ public class ResourceType {
     public final static ResourceType CPU_PERCENT = new ResourceType("CPU_PERCENT") {
         @Override
         protected void validate(long... values) throws IllegalArgumentException {
-            Objects.requireNonNull(values);
-            if (values.length != 1
+            if (values == null || values.length != 1
                     || values[0] < 1
-                    || values[0] > Runtime.getRuntime().availableProcessors() * 100L) {
+                    || values[0] > Runtime.getRuntime().availableProcessors() * 100) {
                 throw new IllegalArgumentException("Bad CPU_PERCENT constraint: " + values[0]);
             }
         }
@@ -73,8 +70,7 @@ public class ResourceType {
     public final static ResourceType HEAP_RETAINED = new ResourceType("HEAP_RETAINED") {
         @Override
         protected void validate(long... values) throws IllegalArgumentException {
-            Objects.requireNonNull(values);
-            if (values.length != 1
+            if (values == null || values.length != 1
                     || values[0] <= 0
                     || values[0] > Runtime.getRuntime().maxMemory()) {
                 throw new IllegalArgumentException("Bad HEAP_RETAINED constraint: " + values[0]);

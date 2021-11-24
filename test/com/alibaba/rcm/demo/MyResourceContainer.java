@@ -28,12 +28,10 @@ import com.alibaba.rcm.internal.AbstractResourceContainer;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Properties;
 
 public class MyResourceContainer extends AbstractResourceContainer {
 
     public List<String> operations = new ArrayList<>();
-    Properties props = new Properties();
 
     private boolean dead;
 
@@ -62,16 +60,6 @@ public class MyResourceContainer extends AbstractResourceContainer {
     @Override
     public Iterable<Constraint> getConstraints() {
         return null;
-    }
-
-    @Override
-    public Properties getProperties() {
-        return props;
-    }
-
-    @Override
-    public void setProperties(Properties props) {
-        this.props = props;
     }
 
     @Override

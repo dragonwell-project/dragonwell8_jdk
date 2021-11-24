@@ -32,7 +32,6 @@ import sun.misc.VM;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Properties;
 
 /**
  * A skeletal implementation of {@link ResourceContainer} that practices
@@ -64,16 +63,6 @@ public abstract class AbstractResourceContainer implements ResourceContainer {
         }
         return SharedSecrets.getJavaLangAccess().getResourceContainer(Thread.currentThread());
     }
-
-    /**
-     * Get the resource container's property map.
-     */
-    public abstract Properties getProperties();
-
-    /**
-     * Set the resource container's property map.
-     */
-    public abstract void setProperties(Properties props);
 
     public abstract List<Long> getActiveContainerThreadIds();
 
@@ -169,16 +158,6 @@ public abstract class AbstractResourceContainer implements ResourceContainer {
         @Override
         public Iterable<Constraint> getConstraints() {
             return Collections.emptyList();
-        }
-
-        @Override
-        public Properties getProperties() {
-            throw new UnsupportedOperationException("should not reach here");
-        }
-
-        @Override
-        public void setProperties(Properties props) {
-            throw new UnsupportedOperationException("should not reach here");
         }
 
         @Override
