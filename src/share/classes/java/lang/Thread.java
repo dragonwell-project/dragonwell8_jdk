@@ -37,16 +37,13 @@ import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.LockSupport;
-<<<<<<< HEAD
 import com.alibaba.rcm.internal.AbstractResourceContainer;
 import sun.misc.VM;
 import com.alibaba.wisp.engine.*;
 import sun.misc.SharedSecrets;
 import sun.misc.WispEngineAccess;
-=======
 
 import jdk.internal.misc.TerminatingThreadLocal;
->>>>>>> upstream/master
 import sun.nio.ch.Interruptible;
 import sun.reflect.CallerSensitive;
 import sun.reflect.Reflection;
@@ -863,14 +860,10 @@ class Thread implements Runnable {
      * This method is called by the system to give a Thread
      * a chance to clean up before it actually exits.
      */
-<<<<<<< HEAD
     void exit() {
-=======
-    private void exit() {
         if (TerminatingThreadLocal.REGISTRY.isPresent()) {
             TerminatingThreadLocal.threadTerminated();
         }
->>>>>>> upstream/master
         if (group != null) {
             group.threadTerminated(this);
             group = null;
