@@ -107,7 +107,7 @@ public class Coroutine extends CoroutineBase {
 
     public static void yieldTo(Coroutine target) {
         JavaLangAccess jla = SharedSecrets.getJavaLangAccess();
-        jla.getCoroutineSupport(jla.currentThread0()).symmetricYieldTo(target);
+        jla.getCoroutineSupport(jla.currentThread0()).unsafeSymmetricYieldTo(target);
     }
 
     /**

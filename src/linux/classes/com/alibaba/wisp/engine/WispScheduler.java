@@ -25,6 +25,7 @@ import sun.misc.JavaLangAccess;
 import sun.misc.SharedSecrets;
 import sun.misc.UnsafeAccess;
 
+import java.dyn.CoroutineSupport;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.Arrays;
@@ -138,6 +139,9 @@ class WispScheduler {
                 WispScheduler.this.engine.carrierEngines.add(carrier);
                 WispEngine.registerPerfCounter(carrier);
                 WispSysmon.INSTANCE.register(carrier);
+                // For Wisp2, the carrier may not create any coroutine, but it can steal coroutine from
+                // other carrier. then there are some coroutine in this carrier.
+                CoroutineSupport.markAsCarrier();
                 runCarrier(carrier);
             } finally {
                 WispEngine.carrierThreads.remove(thread);
